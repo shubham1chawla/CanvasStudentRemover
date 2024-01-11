@@ -14,7 +14,7 @@ parser.add_argument("--url", type=str, help="Link to the people's tab of the Can
 parser.add_argument("--username", type=str, help="ASU login username")
 parser.add_argument("--password", type=str, help="ASU login password")
 parser.add_argument("--limit", type=int, help="Limit student removal", default=25)
-parser.add_argument("--exclude", type=str, help="Path to exclude file")
+parser.add_argument("--exclude", type=str, help="Path to exclude file", required=False)
 parser.add_argument("--detach", type=bool, help="Prevent auto-closing of browser", default=True)
 parser.add_argument("--timeout", type=int, help="Timeout in seconds", default=60)
 args = parser.parse_args()
@@ -62,12 +62,14 @@ def apply_filter(contains: str) -> None:
 
 def remove_students() -> None:
     exclude_names = set()
-    with open(args.exclude) as file:
-        for exclude_name in file.read().splitlines():
-            exclude_names.add(exclude_name.strip())
-    print(f"Excluding: {exclude_names}")
+    if args.exclude != None:
+        with open(args.exclude) as file:
+            for exclude_name in file.read().splitlines():
+                exclude_names.add(exclude_name.strip())
+        print(f"Excluding: {exclude_names}")
 
     removed = 0
+    retry = 3
     while removed < args.limit:
         apply_filter("Student")
 
@@ -82,7 +84,12 @@ def remove_students() -> None:
                 break
         if not student:
             print(f"No student found! Removed {removed} students.")
-            break
+            retry -= 1
+            if retry == 0:
+                break
+            print("Retrying...")
+            apply_filter("TA")
+            continue
 
         wait(driver, args.timeout).until(EC.element_to_be_clickable((By.CSS_SELECTOR, "td.right > div.admin-links > a")))
         student.find_element(By.CSS_SELECTOR, "td.right > div.admin-links > a").click()
