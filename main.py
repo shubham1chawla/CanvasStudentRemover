@@ -68,8 +68,7 @@ def remove_students() -> None:
                 exclude_names.add(exclude_name.strip())
         print(f"Excluding: {exclude_names}")
 
-    removed = 0
-    retry = 3
+    removed, retry = 0, 3
     while removed < args.limit:
         apply_filter("Student")
 
@@ -109,6 +108,8 @@ def remove_students() -> None:
         removed += 1
 
         apply_filter("TA")
+
+    print(f"Removed: {removed}. Limit: {args.limit}")
 
 
 options = Options()
