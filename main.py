@@ -8,7 +8,6 @@ from selenium.webdriver.support.ui import Select
 from selenium.webdriver.common.by import By
 from argparse import ArgumentParser
 
-TIMEOUT_SECONDS = 60
 
 parser = ArgumentParser(description="Removes Students from Canvas course automatically.")
 parser.add_argument("--url", type=str, help="Link to the people's tab of the Canvas course, Eg. https://canvas.asu.edu/courses/<code>/users")
@@ -16,6 +15,8 @@ parser.add_argument("--username", type=str, help="ASU login username")
 parser.add_argument("--password", type=str, help="ASU login password")
 parser.add_argument("--limit", type=int, help="Limit student removal", default=25)
 parser.add_argument("--exclude", type=str, help="Path to exclude file")
+parser.add_argument("--detach", type=bool, help="Prevent auto-closing of browser", default=True)
+parser.add_argument("--timeout", type=int, help="Timeout in seconds", default=60)
 args = parser.parse_args()
 
 
@@ -23,7 +24,7 @@ def handle_duo_login() -> None:
     duo_iframe = driver.find_element(By.CSS_SELECTOR, "#login > iframe")
     driver.switch_to.frame(duo_iframe)
 
-    wait(driver, TIMEOUT_SECONDS).until(EC.presence_of_element_located((By.ID, "auth_methods")))
+    wait(driver, args.timeout).until(EC.presence_of_element_located((By.ID, "auth_methods")))
     push_option = driver.find_element(By.CLASS_NAME, "push-label")
     push_option.find_element(By.TAG_NAME, "button").click()
 
@@ -45,11 +46,11 @@ def wait_for_loading_students() -> None:
     def is_loading() -> bool:
         input = driver.find_element(By.CSS_SELECTOR, "#tab-0 > input[type=hidden]")
         return input.get_attribute("class") == "loading"
-    wait(driver, TIMEOUT_SECONDS).until(lambda _: not is_loading())
+    wait(driver, args.timeout).until(lambda _: not is_loading())
 
 
 def apply_filter(contains: str) -> None:
-    wait(driver, TIMEOUT_SECONDS).until(EC.presence_of_element_located((By.CSS_SELECTOR, "#tab-0 > select")))
+    wait(driver, args.timeout).until(EC.presence_of_element_located((By.CSS_SELECTOR, "#tab-0 > select")))
     select = driver.find_element(By.CSS_SELECTOR, "#tab-0 > select")
     for option in select.find_elements(By.TAG_NAME, "option"):
         if contains in option.get_attribute("innerHTML"):
@@ -74,7 +75,8 @@ def remove_students() -> None:
         student = None
         for possible_student in students:
             student_name = possible_student.find_element(By.CSS_SELECTOR, "td > a").get_attribute("innerHTML")
-            if student_name.strip() not in exclude_names:
+            student_name = student_name.split("<i>")[0].strip()
+            if student_name not in exclude_names:
                 print(f"{removed+1} - REMOVING: {student_name}")
                 student = possible_student
                 break
@@ -82,10 +84,10 @@ def remove_students() -> None:
             print(f"No student found! Removed {removed} students.")
             break
 
-        wait(driver, TIMEOUT_SECONDS).until(EC.element_to_be_clickable((By.CSS_SELECTOR, "td.right > div.admin-links > a")))
+        wait(driver, args.timeout).until(EC.element_to_be_clickable((By.CSS_SELECTOR, "td.right > div.admin-links > a")))
         student.find_element(By.CSS_SELECTOR, "td.right > div.admin-links > a").click()
 
-        wait(driver, TIMEOUT_SECONDS).until(EC.element_to_be_clickable(
+        wait(driver, args.timeout).until(EC.element_to_be_clickable(
             (By.XPATH, "//td[contains(@class, 'right')][.//a[text()[contains(., 'Remove From Course')]]]")
         ))
         admin_links = student.find_elements(By.CSS_SELECTOR, "td.right > div.admin-links > ul > li > a")
@@ -94,24 +96,24 @@ def remove_students() -> None:
                 admin_link.click()
                 break
 
-        wait(driver, TIMEOUT_SECONDS).until(EC.alert_is_present())
+        wait(driver, args.timeout).until(EC.alert_is_present())
         driver.switch_to.alert.accept()
         driver.switch_to.parent_frame()
         removed += 1
 
-        apply_filter("All Roles")
+        apply_filter("TA")
 
 
-# Setting up Chrome
 options = Options()
-options.add_experimental_option("detach", True)
+options.add_experimental_option("detach", args.detach)
 
 service = Service(ChromeDriverManager().install())
 driver = webdriver.Chrome(service=service, options=options)
 
-driver.get(args.url)
-driver.maximize_window()
+if __name__ == "__main__":
+    driver.get(args.url)
+    driver.maximize_window()
 
-handle_asu_login()
-handle_duo_login()
-remove_students()
+    handle_asu_login()
+    handle_duo_login()
+    remove_students()
